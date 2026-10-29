@@ -1,24 +1,112 @@
-
 name: Build Capri Android APK
+
 'on':
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+push:
+branches:
+- main
+workflow_dispatch:
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    name: Build debug APK
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out Android project
-        uses: actions/checkout@v4
+build:
+name: Build debug APK
+runs-on: ubuntu-latest
 
-      - name: Check out original Capri
-        uses: actions/checkout@v4
-        with:
-          repository: mochiiwuff/capri-desktop
-          path: capri-source
+steps:
+  - name: Check out Android project
+    uses: actions/checkout@v4
+
+  - name: Check out original Capri
+    uses: actions/checkout@v4
+    with:
+      repository: mochiiwuff/capri-desktop
+      path: capri-source
+
+  - name: Copy Capri files and install bridge
+    shell: bash
+    run: |
+      set -eu
+
+      BRIDGE="app/src/main/assets/src/renderer/js/android-host.js"
+
+      if [ ! -f "$BRIDGE" ]; then
+        echo "ERROR: android-host.js is missing."
+        exit 1
+      fi
+
+      cp "$BRIDGE" /tmp/android-host.js
+
+      mkdir -p app/src/main/assets/src
+      mkdir -p app/src/main/assets/assets
+
+      rm -rf app/src/main/assets/src/renderer
+      cp -R capri-source/src/renderer app/src/main/assets/src/renderer
+      cp -R capri-source/assets/. app/src/main/assets/assets/
+
+      INDEX="app/src/main/assets/src/renderer/index.html"
+
+      if [ ! -f "$INDEX" ]; then
+        echo "ERROR: index.html was not found."
+        exit 1
+      fi
+
+      mkdir -p app/src/main/assets/src/renderer/js
+      cp /tmp/android-host.js app/src/main/assets/src/renderer/js/android-host.js
+
+      if ! grep -q 'js/android-host.js' "$INDEX"; then
+        sed -i 's|<script type="module" src="js/app.js"></script>|<script src="js/android-host.js"></script>\
+      <script type="module" src="js/app.js"></script>|' "$INDEX"
+      fi
+
+      echo "Renderer and Android bridge installed."
+
+  - name: Add image-load diagnostics
+    shell: bash
+    run: |
+      set -eu
+
+      APP="app/src/main/assets/src/renderer/js/app.js"
+
+      if [ ! -f "$APP" ]; then
+        echo "ERROR: app.js was not found."
+        exit 1
+      fi
+
+      sed -i "s|img.onerror = reject;|img.onerror = () => reject(new Error('Failed to load image: ' + src));|" "$APP"
+
+      echo "Image diagnostics enabled."
+
+  - name: Set up Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '21'
+
+  - name: Set up Gradle
+    uses: gradle/actions/setup-gradle@v6
+    with:
+      gradle-version: '9.6.0'
+
+  - name: Build Android APK
+    run: gradle :app:assembleDebug --stacktrace
+
+  - name: Verify APK exists
+    shell: bash
+    run: |
+      set -eu
+      echo "Looking for generated APK files..."
+      find app/build/outputs/apk -type f -name "*.apk" -print
+      test -n "$(find app/build/outputs/apk -type f -name "*.apk" -print -quit)" || {
+        echo "ERROR: No APK was generated."
+        exit 1
+      }
+
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: Capri-Android-debug
+      path: app/build/outputs/apk/debug/*.apk
+      if-no-files-found: error
+      retention-days: 7
