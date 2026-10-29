@@ -60,9 +60,9 @@ jobs:
           source = path.read_text()
 
           source = source.replace(
-              "img.onerror = reject;",
-              "img.onerror = () => reject(new Error('Failed to load image: ' + src));"
-          )
+    "img.onerror = reject;",
+    "img.onerror = () => reject(new Error('Failed to load image: ' + img.src));"
+)
 
           source = source.replace(
               "console.error('[capri] boot failed', err);",
