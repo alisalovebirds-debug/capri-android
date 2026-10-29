@@ -1,7 +1,6 @@
 
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <application
         android:allowBackup="false"
         android:label="Capri"
@@ -11,7 +10,6 @@
         <activity
             android:name="com.capri.android.MainActivity"
             android:exported="true"
-            android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|keyboardHidden">
 
             <intent-filter>
@@ -20,7 +18,5 @@
             </intent-filter>
 
         </activity>
-
     </application>
-
 </manifest>
