@@ -24,50 +24,58 @@ jobs:
           repository: mochiiwuff/capri-desktop
           path: capri-source
 
-      - name: Copy original Capri files
+      - name: Copy Capri files and install bridge
         run: |
+          set -eu
+
+          BRIDGE="app/src/main/assets/src/renderer/js/android-host.js"
+
+          if [ ! -f "$BRIDGE" ]; then
+            echo "ERROR: Local android-host.js is missing."
+            exit 1
+          fi
+
+          cp "$BRIDGE" /tmp/android-host.js
+
+          echo "Checking original renderer..."
+          find capri-source/src/renderer -maxdepth 3 -name "index.html" -print
+
           mkdir -p app/src/main/assets/src
           mkdir -p app/src/main/assets/assets
 
-          cp -R capri-source/src/renderer \
-            app/src/main/assets/src/renderer
+          rm -rf app/src/main/assets/src/renderer
+          cp -R capri-source/src/renderer app/src/main/assets/src/renderer
 
-          cp -R capri-source/assets/. \
-            app/src/main/assets/assets/
+          cp -R capri-source/assets/. app/src/main/assets/assets/
 
-          echo "Checking for Android bridge..."
-          find app/src/main/assets/src/renderer \
-            -name "android-host.js" -print
+          echo "Checking copied index.html..."
+          find app/src/main/assets/src/renderer -maxdepth 3 -name "index.html" -print
+
+          INDEX="app/src/main/assets/src/renderer/index.html"
+
+          if [ ! -f "$INDEX" ]; then
+            echo "ERROR: Renderer index.html was not found at the expected path."
+            exit 1
+          fi
+
+          mkdir -p app/src/main/assets/src/renderer/js
+          cp /tmp/android-host.js app/src/main/assets/src/renderer/js/android-host.js
 
           python3 - <<'PY'
           from pathlib import Path
 
-          renderer = Path("app/src/main/assets/src/renderer")
-          index = renderer / "index.html"
-          bridge = renderer / "js/android-host.js"
-
-          if not index.exists():
-              raise SystemExit("ERROR: Capri index.html was not copied.")
-
-          if not bridge.exists():
-              raise SystemExit(
-                  "ERROR: android-host.js is missing from the copied renderer. "
-                  "The build cannot continue until the bridge is copied."
-              )
-
+          index = Path("app/src/main/assets/src/renderer/index.html")
           html = index.read_text(encoding="utf-8")
           marker = '<script type="module" src="js/app.js"></script>'
-          bridge_tag = '<script src="js/android-host.js"></script>'
+          tag = '<script src="js/android-host.js"></script>'
 
-          if bridge_tag not in html:
+          if tag not in html:
               if marker not in html:
-                  raise SystemExit(
-                      "ERROR: Could not find the app.js script in index.html."
-                  )
-              html = html.replace(marker, bridge_tag + "\n" + marker)
+                  raise SystemExit("ERROR: Could not find app.js script tag.")
+              html = html.replace(marker, tag + "\n" + marker)
 
           index.write_text(html, encoding="utf-8")
-          print("Android bridge found and script tag configured.")
+          print("Capri HTML and Android bridge are ready.")
           PY
 
       - name: Set up Java
