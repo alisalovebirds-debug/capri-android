@@ -25,33 +25,30 @@ steps:
       path: capri-source
 
   - name: Copy Capri files and install bridge
+    shell: bash
     run: |
       set -eu
 
       BRIDGE="app/src/main/assets/src/renderer/js/android-host.js"
 
       if [ ! -f "$BRIDGE" ]; then
-        echo "ERROR: Local android-host.js is missing."
+        echo "ERROR: android-host.js is missing."
         exit 1
       fi
 
       cp "$BRIDGE" /tmp/android-host.js
-
-      echo "Checking original renderer..."
-      find capri-source/src/renderer -maxdepth 3 -name "index.html" -print
 
       mkdir -p app/src/main/assets/src
       mkdir -p app/src/main/assets/assets
 
       rm -rf app/src/main/assets/src/renderer
       cp -R capri-source/src/renderer app/src/main/assets/src/renderer
-
       cp -R capri-source/assets/. app/src/main/assets/assets/
 
       INDEX="app/src/main/assets/src/renderer/index.html"
 
       if [ ! -f "$INDEX" ]; then
-        echo "ERROR: Renderer index.html was not found."
+        echo "ERROR: index.html was not found."
         exit 1
       fi
 
@@ -63,19 +60,21 @@ steps:
 
       index = Path("app/src/main/assets/src/renderer/index.html")
       html = index.read_text(encoding="utf-8")
+
       marker = '<script type="module" src="js/app.js"></script>'
       tag = '<script src="js/android-host.js"></script>'
 
       if tag not in html:
           if marker not in html:
-              raise SystemExit("ERROR: Could not find app.js script tag.")
+              raise SystemExit("ERROR: app.js script tag not found.")
           html = html.replace(marker, tag + "\n" + marker, 1)
 
       index.write_text(html, encoding="utf-8")
-      print("Capri HTML and Android bridge are ready.")
+      print("Renderer and Android bridge installed.")
       PY
 
   - name: Add image-load diagnostics
+    shell: bash
     run: |
       set -eu
 
@@ -88,17 +87,16 @@ steps:
           raise SystemExit("ERROR: app.js was not found.")
 
       code = path.read_text(encoding="utf-8")
-
       old = "img.onerror = reject;"
       new = "img.onerror = () => reject(new Error('Failed to load image: ' + src));"
 
       if new not in code:
           if old not in code:
-              raise SystemExit("ERROR: Could not find img.onerror = reject;")
+              raise SystemExit("ERROR: Image error handler not found.")
           code = code.replace(old, new, 1)
 
       path.write_text(code, encoding="utf-8")
-      print("Image-load diagnostics enabled.")
+      print("Image diagnostics enabled.")
       PY
 
   - name: Set up Java
@@ -113,7 +111,7 @@ steps:
       gradle-version: '9.6.0'
 
   - name: Build Android APK
-    run: gradle :app:assembleDebug --stacktrace --info
+    run: gradle :app:assembleDebug --stacktrace
 
   - name: Upload APK
     uses: actions/upload-artifact@v4
