@@ -1,3 +1,4 @@
+
 name: Build Capri Android APK
 
 on:
@@ -37,8 +38,10 @@ jobs:
 
           cp "$BRIDGE" /tmp/android-host.js
 
-          echo "Checking original renderer..."
-          find capri-source/src/renderer -maxdepth 3 -name "index.html" -print
+          if [ ! -d "capri-source/src/renderer" ]; then
+            echo "ERROR: Original renderer folder not found."
+            exit 1
+          fi
 
           mkdir -p app/src/main/assets/src
           mkdir -p app/src/main/assets/assets
@@ -48,13 +51,10 @@ jobs:
 
           cp -R capri-source/assets/. app/src/main/assets/assets/
 
-          echo "Checking copied index.html..."
-          find app/src/main/assets/src/renderer -maxdepth 3 -name "index.html" -print
-
           INDEX="app/src/main/assets/src/renderer/index.html"
 
           if [ ! -f "$INDEX" ]; then
-            echo "ERROR: Renderer index.html was not found at the expected path."
+            echo "ERROR: Renderer index.html not found."
             exit 1
           fi
 
@@ -66,16 +66,43 @@ jobs:
 
           index = Path("app/src/main/assets/src/renderer/index.html")
           html = index.read_text(encoding="utf-8")
+
           marker = '<script type="module" src="js/app.js"></script>'
           tag = '<script src="js/android-host.js"></script>'
 
           if tag not in html:
               if marker not in html:
                   raise SystemExit("ERROR: Could not find app.js script tag.")
-              html = html.replace(marker, tag + "\n" + marker)
+              html = html.replace(marker, tag + "\n" + marker, 1)
 
           index.write_text(html, encoding="utf-8")
-          print("Capri HTML and Android bridge are ready.")
+
+          print("Capri renderer, assets, and Android bridge copied.")
+          PY
+
+      - name: Show detailed Capri startup error
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/src/main/assets/src/renderer/js/app.js")
+          code = path.read_text(encoding="utf-8")
+
+          old = """boot().catch((err) => {
+            console.error('[capri] boot failed', err);
+          });"""
+
+          new = """boot().catch((err) => {
+            console.error('[capri] boot failed: ' + (err?.name || 'Error') + ': ' + (err?.message || String(err)) + ' | stack: ' + (err?.stack || 'unavailable'));
+          });"""
+
+          if old not in code:
+              raise SystemExit(
+                  "ERROR: Expected boot error handler not found in app.js."
+              )
+
+          path.write_text(code.replace(old, new, 1), encoding="utf-8")
+          print("Detailed startup error logging enabled.")
           PY
 
       - name: Set up Java
