@@ -1,129 +1,125 @@
-
 name: Build Capri Android APK
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+push:
+branches:
+- main
+workflow_dispatch:
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    name: Build debug APK
-    runs-on: ubuntu-latest
+build:
+name: Build debug APK
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Check out Android project
-        uses: actions/checkout@v4
+steps:
+  - name: Check out Android project
+    uses: actions/checkout@v4
 
-      - name: Check out original Capri
-        uses: actions/checkout@v4
-        with:
-          repository: mochiiwuff/capri-desktop
-          path: capri-source
+  - name: Check out original Capri
+    uses: actions/checkout@v4
+    with:
+      repository: mochiiwuff/capri-desktop
+      path: capri-source
 
-      - name: Copy Capri files and install bridge
-        run: |
-          set -eu
+  - name: Copy Capri files and install bridge
+    run: |
+      set -eu
 
-          BRIDGE="app/src/main/assets/src/renderer/js/android-host.js"
+      BRIDGE="app/src/main/assets/src/renderer/js/android-host.js"
 
-          if [ ! -f "$BRIDGE" ]; then
-            echo "ERROR: Local android-host.js is missing."
-            exit 1
-          fi
+      if [ ! -f "$BRIDGE" ]; then
+        echo "ERROR: Local android-host.js is missing."
+        exit 1
+      fi
 
-          cp "$BRIDGE" /tmp/android-host.js
+      cp "$BRIDGE" /tmp/android-host.js
 
-          if [ ! -d "capri-source/src/renderer" ]; then
-            echo "ERROR: Original renderer folder not found."
-            exit 1
-          fi
+      echo "Checking original renderer..."
+      find capri-source/src/renderer -maxdepth 3 -name "index.html" -print
 
-          mkdir -p app/src/main/assets/src
-          mkdir -p app/src/main/assets/assets
+      mkdir -p app/src/main/assets/src
+      mkdir -p app/src/main/assets/assets
 
-          rm -rf app/src/main/assets/src/renderer
-          cp -R capri-source/src/renderer app/src/main/assets/src/renderer
+      rm -rf app/src/main/assets/src/renderer
+      cp -R capri-source/src/renderer app/src/main/assets/src/renderer
 
-          cp -R capri-source/assets/. app/src/main/assets/assets/
+      cp -R capri-source/assets/. app/src/main/assets/assets/
 
-          INDEX="app/src/main/assets/src/renderer/index.html"
+      INDEX="app/src/main/assets/src/renderer/index.html"
 
-          if [ ! -f "$INDEX" ]; then
-            echo "ERROR: Renderer index.html not found."
-            exit 1
-          fi
+      if [ ! -f "$INDEX" ]; then
+        echo "ERROR: Renderer index.html was not found."
+        exit 1
+      fi
 
-          mkdir -p app/src/main/assets/src/renderer/js
-          cp /tmp/android-host.js app/src/main/assets/src/renderer/js/android-host.js
+      mkdir -p app/src/main/assets/src/renderer/js
+      cp /tmp/android-host.js app/src/main/assets/src/renderer/js/android-host.js
 
-          python3 - <<'PY'
-          from pathlib import Path
+      python3 - <<'PY'
+      from pathlib import Path
 
-          index = Path("app/src/main/assets/src/renderer/index.html")
-          html = index.read_text(encoding="utf-8")
+      index = Path("app/src/main/assets/src/renderer/index.html")
+      html = index.read_text(encoding="utf-8")
+      marker = '<script type="module" src="js/app.js"></script>'
+      tag = '<script src="js/android-host.js"></script>'
 
-          marker = '<script type="module" src="js/app.js"></script>'
-          tag = '<script src="js/android-host.js"></script>'
+      if tag not in html:
+          if marker not in html:
+              raise SystemExit("ERROR: Could not find app.js script tag.")
+          html = html.replace(marker, tag + "\n" + marker, 1)
 
-          if tag not in html:
-              if marker not in html:
-                  raise SystemExit("ERROR: Could not find app.js script tag.")
-              html = html.replace(marker, tag + "\n" + marker, 1)
+      index.write_text(html, encoding="utf-8")
+      print("Capri HTML and Android bridge are ready.")
+      PY
 
-          index.write_text(html, encoding="utf-8")
+  - name: Add image-load diagnostics
+    run: |
+      set -eu
 
-          print("Capri renderer, assets, and Android bridge copied.")
-          PY
+      python3 - <<'PY'
+      from pathlib import Path
 
-      - name: Show detailed Capri startup error
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
+      path = Path("app/src/main/assets/src/renderer/js/app.js")
 
-          path = Path("app/src/main/assets/src/renderer/js/app.js")
-          code = path.read_text(encoding="utf-8")
+      if not path.exists():
+          raise SystemExit("ERROR: app.js was not found.")
 
-          old = """boot().catch((err) => {
-            console.error('[capri] boot failed', err);
-          });"""
+      code = path.read_text(encoding="utf-8")
 
-          new = """boot().catch((err) => {
-            console.error('[capri] boot failed: ' + (err?.name || 'Error') + ': ' + (err?.message || String(err)) + ' | stack: ' + (err?.stack || 'unavailable'));
-          });"""
+      old = "img.onerror = reject;"
+      new = "img.onerror = () => reject(new Error('Failed to load image: ' + src));"
 
+      if new not in code:
           if old not in code:
-              raise SystemExit(
-                  "ERROR: Expected boot error handler not found in app.js."
-              )
+              raise SystemExit("ERROR: Could not find img.onerror = reject;")
+          code = code.replace(old, new, 1)
 
-          path.write_text(code.replace(old, new, 1), encoding="utf-8")
-          print("Detailed startup error logging enabled.")
-          PY
+      path.write_text(code, encoding="utf-8")
+      print("Image-load diagnostics enabled.")
+      PY
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
+  - name: Set up Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '21'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '9.6.0'
+  - name: Set up Gradle
+    uses: gradle/actions/setup-gradle@v6
+    with:
+      gradle-version: '9.6.0'
 
-      - name: Build Android APK
-        run: gradle :app:assembleDebug --stacktrace --info
+  - name: Build Android APK
+    run: gradle :app:assembleDebug --stacktrace --info
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: Capri-Android-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    if: success()
+    with:
+      name: Capri-Android-debug
+      path: app/build/outputs/apk/debug/*.apk
+      if-no-files-found: error
+      retention-days: 7
