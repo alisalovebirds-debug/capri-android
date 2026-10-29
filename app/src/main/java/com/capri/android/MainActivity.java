@@ -8,13 +8,18 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.webkit.WebViewAssetLoader;
+
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private WebViewAssetLoader assetLoader;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,6 +34,13 @@ public class MainActivity extends Activity {
 
         hideSystemBars();
 
+        assetLoader = new WebViewAssetLoader.Builder()
+            .addPathHandler(
+                "/assets/",
+                new WebViewAssetLoader.AssetsPathHandler(this)
+            )
+            .build();
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(8, 12, 25));
 
@@ -39,24 +51,23 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
 
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(
+                WebView view,
+                WebResourceRequest request
+            ) {
+                return assetLoader.shouldInterceptRequest(
+                    request.getUrl()
+                );
+            }
+        });
 
+        webView.setWebChromeClient(new WebChromeClient());
         setContentView(webView);
 
-        // Temporary test page. We'll connect Capri's assets next.
-        webView.loadDataWithBaseURL(
-            "https://appassets.androidplatform.net/",
-            "<!doctype html><html><head>" +
-            "<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-            "</head><body style='margin:0;background:#080c19;color:#f1f3ff;" +
-            "font-family:sans-serif;display:grid;place-items:center;height:100vh'>" +
-            "<div style='text-align:center'><h1>Capri</h1>" +
-            "<p>Android app shell is running.</p>" +
-            "<p>Original animations are the next step.</p></div></body></html>",
-            "text/html",
-            "UTF-8",
-            null
+        webView.loadUrl(
+            "https://appassets.androidplatform.net/assets/src/renderer/index.html"
         );
     }
 
