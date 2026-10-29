@@ -16,8 +16,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Check out Android project
         uses: actions/checkout@v4
+
+      - name: Check out original Capri
+        uses: actions/checkout@v4
+        with:
+          repository: mochiiwuff/capri-desktop
+          path: capri-source
+
+      - name: Copy original Capri files
+        run: |
+          mkdir -p app/src/main/assets/src
+          mkdir -p app/src/main/assets/assets
+
+          cp -R capri-source/src/renderer \
+            app/src/main/assets/src/renderer
+
+          cp -R capri-source/assets/. \
+            app/src/main/assets/assets/
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path(
+              "app/src/main/assets/src/renderer/index.html"
+          )
+          html = index.read_text(encoding="utf-8")
+
+          marker = '<script type="module" src="js/app.js"></script>'
+          bridge = '<script src="js/android-host.js"></script>'
+
+          if bridge not in html:
+              if marker not in html:
+                  raise SystemExit("Could not find app.js script in index.html")
+              html = html.replace(marker, bridge + "\n" + marker)
+
+          index.write_text(html, encoding="utf-8")
+          PY
 
       - name: Set up Java
         uses: actions/setup-java@v4
