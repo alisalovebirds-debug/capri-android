@@ -9,7 +9,7 @@
         android:usesCleartextTraffic="false">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.capri.android.MainActivity"
             android:exported="true"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|keyboardHidden">
@@ -20,5 +20,7 @@
             </intent-filter>
 
         </activity>
+
     </application>
+
 </manifest>
