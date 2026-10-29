@@ -1,3 +1,4 @@
+
 name: Build Capri Android APK
 
 'on':
@@ -45,7 +46,6 @@ jobs:
           <script type="module" src="js/app.js"></script>|' "$INDEX"
           fi
 
-      
       - name: Add image-load diagnostics
         shell: bash
         run: |
@@ -60,9 +60,9 @@ jobs:
           source = path.read_text()
 
           source = source.replace(
-    "img.onerror = reject;",
-    "img.onerror = () => reject(new Error('Failed to load image: ' + img.src));"
-)
+              "img.onerror = reject;",
+              "img.onerror = () => reject(new Error('Failed to load image: ' + img.src));"
+          )
 
           source = source.replace(
               "console.error('[capri] boot failed', err);",
@@ -72,7 +72,6 @@ jobs:
           path.write_text(source)
           print("Diagnostics patch applied.")
           PY
-
 
       - name: Set up Java
         uses: actions/setup-java@v4
